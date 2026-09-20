@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060c">
+<meta name="description" content="NEON VOID · 霓虹虚空 —— 霓虹赛博朋克风格的纵向下卷弹幕射击。零依赖、纯前端、浏览器即开即玩。">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<title>NEON VOID · 霓虹虚空</title>
+<style>
+:root{
+  --void:#05060c; --deep:#0a0a1a; --panel:rgba(11,13,30,.72);
+  --cyan:#00fff5; --cyan-dim:#0f9fa8; --magenta:#ff00ff; --pink:#ff2d55;
+  --gold:#ffd400; --orange:#ff6a00; --green:#39ff88; --purple:#c16bff; --blue:#3aa0ff;
+  --text:#e8f6ff; --dim:#6a7ba0; --faint:#26304d;
+  --gutter:0px;
+  --font-ui:ui-sans-serif,system-ui,"Segoe UI","Microsoft YaHei",sans-serif;
+  --font-mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100%;overflow:hidden;background:var(--void);color:var(--text);
+  font-family:var(--font-ui);-webkit-font-smoothing:antialiased;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
+}
+#screen{position:fixed;inset:0;display:block}
+
+/* ── 通用面板：毛玻璃 + 霓虹描边 ───────────────────────────── */
+.ui{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:20}
+.panel{
+  pointer-events:auto;
+  background:var(--panel);
+  backdrop-filter:blur(14px) saturate(1.3);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);
+  border:1px solid rgba(0,255,245,.28);
+  border-radius:14px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.09);
+  padding:28px 26px;
+  width:min(92vw,420px);
+  max-height:88vh;overflow-y:auto;
+  text-align:center;
+}
+.panel.hidden{display:none}
+.title{
+  font-family:var(--font-mono);font-size:clamp(28px,7.4vw,44px);letter-spacing:.24em;
+  font-weight:700;line-height:1.1;margin-right:-.24em;
+  color:#fff;
+  text-shadow:0 0 4px rgba(0,255,245,.95),0 0 14px rgba(0,255,245,.6),0 0 34px rgba(255,0,255,.42);
+  animation:flicker 5.5s infinite steps(1,end);
+}
+@keyframes flicker{
+  0%,92%,100%{opacity:1}
+  93%{opacity:.55}94%{opacity:1}96%{opacity:.7}97%{opacity:1}
+}
+.subtitle{
+  font-size:12px;letter-spacing:.42em;color:var(--dim);margin:6px 0 22px;margin-right:-.42em;
+  font-family:var(--font-mono);
+}
+.panel h2{
+  font-family:var(--font-mono);font-size:16px;letter-spacing:.2em;font-weight:600;
+  color:var(--cyan);margin-bottom:16px;text-shadow:0 0 10px rgba(0,255,245,.5);
+}
+.menu-btns{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.btn{
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.14em;
+  min-height:46px;padding:0 16px;
+  color:var(--text);background:rgba(255,255,255,.035);
+  border:1px solid var(--faint);border-radius:9px;
+  cursor:pointer;transition:all .13s ease-out;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn:hover,.btn:focus-visible{
+  border-color:var(--cyan);color:#fff;background:rgba(0,255,245,.09);
+  box-shadow:0 0 14px rgba(0,255,245,.34),inset 0 0 12px rgba(0,255,245,.1);
+  outline:none;
+}
+.btn:active{transform:translateY(1px) scale(.988)}
+.btn[data-on="false"]{color:var(--dim);border-color:#1b2136}
+.btn.primary{
+  border-color:var(--cyan);color:#fff;background:rgba(0,255,245,.11);
+  box-shadow:0 0 16px rgba(0,255,245,.3),inset 0 0 20px rgba(0,255,245,.08);
+}
+.btn.primary:hover{box-shadow:0 0 24px rgba(0,255,245,.55),inset 0 0 24px rgba(0,255,245,.14)}
+.btn small{color:var(--dim);font-size:10.5px;letter-spacing:.05em}
+
+.name-row{display:flex;gap:8px;margin-bottom:16px;align-items:center}
+.name-row label{font-family:var(--font-mono);font-size:11px;color:var(--dim);letter-spacing:.1em;white-space:nowrap}
+.name-row input{
+  flex:1;min-width:0;background:rgba(0,0,0,.4);border:1px solid var(--faint);border-radius:8px;
+  color:var(--text);font-family:var(--font-mono);font-size:13px;letter-spacing:.1em;
+  padding:9px 11px;outline:none;text-align:center;
+}
+.name-row input:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,255,245,.3)}
+.name-row input.bad{border-color:var(--pink);box-shadow:0 0 12px rgba(255,45,85,.4)}
+.err{color:var(--pink);font-size:11px;margin:-8px 0 12px;font-family:var(--font-mono);min-height:14px}
+
+.note{font-size:10.5px;line-height:1.7;color:var(--dim);font-family:var(--font-mono);text-align:left}
+.note b{color:var(--text);font-weight:500}
+.meta{
+  display:flex;justify-content:space-between;gap:10px;font-family:var(--font-mono);
+  font-size:11px;color:var(--dim);margin-bottom:18px;padding-bottom:14px;
+  border-bottom:1px solid var(--faint);
+}
+.meta b{color:var(--cyan);font-weight:600}
+
+/* 结算数字 */
+.stats{display:flex;flex-direction:column;gap:1px;margin-bottom:20px;font-family:var(--font-mono)}
+.stats div{display:flex;justify-content:space-between;padding:7px 2px;font-size:12.5px}
+.stats div+div{border-top:1px dashed rgba(38,48,77,.75)}
+.stats span{color:var(--dim);letter-spacing:.08em}
+.stats b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+.stats .hi b{color:var(--gold);text-shadow:0 0 10px rgba(255,212,0,.5)}
+.gameover{
+  font-family:var(--font-mono);font-size:clamp(22px,6vw,32px);letter-spacing:.2em;
+  color:var(--pink);margin-right:-.2em;
+  text-shadow:0 0 6px rgba(255,45,85,.9),0 0 22px rgba(255,45,85,.5);
+}
+
+/* 排行榜 */
+table.board{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;margin-bottom:16px}
+table.board th{
+  font-size:10px;letter-spacing:.14em;color:var(--dim);font-weight:400;text-align:right;
+  padding:0 6px 8px;border-bottom:1px solid var(--faint);
+}
+table.board th:first-child,table.board td:first-child{text-align:left;width:34px}
+table.board td{padding:6px;text-align:right;border-bottom:1px dashed rgba(38,48,77,.55);font-variant-numeric:tabular-nums}
+table.board tr.me td{color:var(--gold);text-shadow:0 0 8px rgba(255,212,0,.45)}
+table.board td:first-child{color:var(--dim)}
+table.board tr:nth-child(2) td:first-child{color:var(--gold)}
+.empty{color:var(--dim);font-family:var(--font-mono);font-size:12px;padding:28px 0}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:12px;text-align:left}
+.keys dt{font-family:var(--font-mono);color:var(--cyan);white-space:nowrap}
+.keys dd{color:var(--dim);line-height:1.6}
+.sect{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--dim);text-align:left;margin:16px 0 8px}
+
+/* ── HUD ─────────────────────────────────────────────────── */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10;font-family:var(--font-mono)}
+#hud.hidden{display:none}
+.hud-block{display:flex;flex-direction:column;gap:2px}
+.hud-label{font-size:10px;letter-spacing:.18em;color:var(--dim)}
+.hud-value{font-size:clamp(16px,1.35vw,22px);font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
+#hud-score{color:#fff;text-shadow:0 0 10px rgba(0,255,245,.55)}
+#hud-combo{color:var(--magenta);text-shadow:0 0 10px rgba(255,0,255,.5)}
+#hud-combo.hot{color:var(--gold);text-shadow:0 0 14px rgba(255,212,0,.85);animation:pulse .3s ease-out}
+@keyframes pulse{0%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+#hud[data-layout="side"] .hud-col{
+  position:absolute;top:0;bottom:0;width:var(--gutter);
+  display:flex;flex-direction:column;justify-content:center;gap:20px;
+  padding:0 26px;
+}
+#hud[data-layout="side"] .hud-left{left:0;align-items:flex-start}
+#hud[data-layout="side"] .hud-right{right:0;align-items:flex-end;text-align:right}
+#hud[data-layout="side"] .hud-bar{display:none}
+#hud[data-layout="top"] .hud-col{display:none}
+#hud[data-layout="top"] .hud-bar{
+  position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:14px;
+  padding:8px 12px;background:linear-gradient(180deg,rgba(5,6,12,.88),rgba(5,6,12,0));
+}
+#hud[data-layout="top"] .hud-value{font-size:15px}
+
+.hud-lives{display:flex;gap:4px}
+.pip{width:22px;height:5px;border-radius:2px;background:#22283d;transition:all .16s ease-out}
+.pip.on{background:var(--cyan);box-shadow:0 0 9px rgba(0,255,245,.85)}
+.pip.shield{background:var(--blue);box-shadow:0 0 9px rgba(58,160,255,.85)}
+.hud-powers{display:flex;flex-direction:column;gap:5px;min-height:8px}
+.pw{display:flex;align-items:center;gap:7px}
+.pw i{width:34px;height:3px;border-radius:2px;background:#22283d;overflow:hidden;display:block}
+.pw i b{display:block;height:100%;background:currentColor;border-radius:2px}
+.pw span{font-size:9.5px;letter-spacing:.1em;color:currentColor}
+.hud-fps{font-size:10px;color:#33405e;letter-spacing:.08em}
+
+/* Boss 血条 */
+#hud-boss{
+  position:absolute;left:50%;transform:translateX(-50%);
+  top:calc(var(--field-top,0px) + 14px);
+  width:min(340px,62%);opacity:0;transition:opacity .25s ease-out;
+}
+#hud-boss.on{opacity:1}
+.boss-name{font-size:10px;letter-spacing:.3em;color:var(--pink);margin-bottom:5px;text-align:center;text-shadow:0 0 10px rgba(255,45,85,.7)}
+.boss-bar{height:7px;border:1px solid rgba(255,45,85,.5);border-radius:4px;overflow:hidden;background:rgba(0,0,0,.55)}
+.boss-bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--pink),var(--magenta));transition:width .1s linear;box-shadow:0 0 12px rgba(255,45,85,.8)}
+
+/* 波次横幅 */
+#hud-banner{
+  position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+  font-family:var(--font-mono);font-size:clamp(24px,5vw,40px);letter-spacing:.28em;margin-right:-.28em;
+  color:#fff;opacity:0;pointer-events:none;
+  text-shadow:0 0 6px rgba(0,255,245,.9),0 0 26px rgba(255,0,255,.55);
+}
+#hud-banner.show{animation:banner 2.2s ease-out}
+@keyframes banner{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(1.3)}
+  14%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  72%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}
+}
+
+/* ── 触屏 ─────────────────────────────────────────────────── */
+#touch{position:fixed;inset:0;z-index:5;display:none;pointer-events:none}
+body.touch-ui #touch{display:block}
+body.touch-ui #screen{touch-action:none}
+#touch-hint{
+  position:absolute;left:0;right:0;bottom:0;height:var(--pad-bottom,0px);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:#33405e;
+}
+body:not(.touch-ui) #touch-hint{display:none}
+body.touch-ui .desktop-only{display:none!important}
+.pause-btn{
+  position:absolute;right:10px;top:calc(var(--field-top,0px) + 8px);
+  width:40px;height:40px;border-radius:10px;z-index:11;
+  background:rgba(11,13,30,.7);border:1px solid var(--faint);color:var(--dim);
+  display:none;align-items:center;justify-content:center;font-size:13px;pointer-events:auto;
+}
+body.touch-ui .pause-btn{display:flex}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+
+<div id="touch"><div id="touch-hint">拖动屏幕操控飞船 · 自动开火</div></div>
+<button class="pause-btn" id="pause-btn" aria-label="暂停">❚❚</button>
+
+<div id="hud" class="hidden" data-layout="side">
+  <div class="hud-col hud-left">
+    <div class="hud-block"><span class="hud-label">SCORE</span><span class="hud-value" id="hud-score">0</span></div>
+    <div class="hud-block"><span class="hud-label">COMBO</span><span class="hud-value" id="hud-combo">x0</span></div>
+    <div class="hud-block"><span class="hud-label">WAVE</span><span class="hud-value" id="hud-wave">1</span></div>
+  </div>
+  <div class="hud-col hud-right">
+    <div class="hud-block"><span class="hud-label">HULL</span><span class="hud-lives" id="hud-lives"></span></div>
+    <div class="hud-block"><span class="hud-label">TIME</span><span class="hud-value" id="hud-time">0:00</span></div>
+    <div class="hud-powers" id="hud-powers"></div>
+    <div class="hud-fps desktop-only" id="hud-fps">--</div>
+  </div>
+  <div class="hud-bar">
+    <div class="hud-block"><span class="hud-label">SCORE</span><span class="hud-value" id="hud-score2">0</span></div>
+    <div class="hud-block"><span class="hud-label">COMBO</span><span class="hud-value" id="hud-combo2">x0</span></div>
+    <div class="hud-block"><span class="hud-label">WAVE</span><span class="hud-value" id="hud-wave2">1</span></div>
+    <div class="hud-lives" id="hud-lives2" style="margin-left:auto"></div>
+  </div>
+  <div id="hud-boss"><div class="boss-name">BOSS</div><div class="boss-bar"><i id="hud-bossfill"></i></div></div>
+  <div id="hud-banner">WAVE 1</div>
+</div>
+
+<div class="ui">
+  <section id="panel-menu" class="panel">
+    <h1 class="title">NEON VOID</h1>
+    <p class="subtitle">霓虹虚空</p>
+    <div class="name-row">
+      <label for="name-input">代号</label>
+      <input id="name-input" maxlength="8" placeholder="3-8 字符" autocomplete="off" spellcheck="false">
+    </div>
+    <p class="err" id="name-err"></p>
+    <div class="menu-btns">
+      <button class="btn primary" data-act="start">开始游戏</button>
+      <button class="btn" data-act="board">排行榜</button>
+      <button class="btn" data-act="help">操作说明</button>
+      <button class="btn" data-act="sound" data-on="true">音效 <small>开</small></button>
+      <button class="btn" data-act="music" data-on="true">音乐 <small>开</small></button>
+      <button class="btn" data-act="shake" data-on="true">屏幕震动 <small>开</small></button>
+    </div>
+    <div class="meta">
+      <span>最高分 <b id="menu-high">0</b></span>
+      <span>总局数 <b id="menu-games">0</b></span>
+      <span>最高波次 <b id="menu-wave">0</b></span>
+    </div>
+    <p class="note">
+      存档仅保存在当前浏览器，<b>清除浏览器缓存会丢失</b>；排行榜仅限本机，不同设备/浏览器不互通。
+    </p>
+  </section>
+
+  <section id="panel-over" class="panel hidden">
+    <p class="gameover">GAME OVER</p>
+    <p class="subtitle" id="over-rank" style="margin-bottom:18px">—</p>
+    <div class="stats">
+      <div class="hi"><span>本局得分</span><b id="over-score">0</b></div>
+      <div><span>历史最高</span><b id="over-high">0</b></div>
+      <div><span>击杀总数</span><b id="over-kills">0</b></div>
+      <div><span>最高连击</span><b id="over-combo">x0</b></div>
+      <div><span>抵达波次</span><b id="over-wave">1</b></div>
+      <div><span>存活时间</span><b id="over-time">0:00</b></div>
+    </div>
+    <div class="menu-btns">
+      <button class="btn primary" data-act="again">再来一局</button>
+      <button class="btn" data-act="board">查看排行榜</button>
+      <button class="btn" data-act="menu">返回主菜单</button>
+    </div>
+  </section>
+
+  <section id="panel-board" class="panel hidden">
+    <h2>本地排行榜</h2>
+    <div id="board-body"></div>
+    <p class="note" style="margin-bottom:16px">仅保存在本机浏览器，最多保留最近 50 条记录。</p>
+    <div class="menu-btns">
+      <button class="btn" data-act="clear-board" id="clear-board-btn">清空排行榜</button>
+      <button class="btn primary" data-act="menu">返回主菜单</button>
+    </div>
+  </section>
+
+  <section id="panel-help" class="panel hidden">
+    <h2>操作说明</h2>
+    <dl class="keys">
+      <dt>WASD / ↑↓←→</dt><dd>移动飞船</dd>
+      <dt>自动开火</dt><dd>无需按键，飞船持续朝正上方射击</dd>
+      <dt>触屏</dt><dd>在游戏区拖动，飞船跟随手指上方</dd>
+      <dt>ESC / P</dt><dd>暂停</dd>
+      <dt>M</dt><dd>音效开关</dd>
+    </dl>
+    <p class="sect">玩法</p>
+    <dl class="keys">
+      <dt>生命</dt><dd>3 格，被击中后短暂无敌并清掉近身弹幕</dd>
+      <dt>连击</dt><dd>2.2 秒内连续击杀累积倍率，受伤断连</dd>
+      <dt>道具</dt><dd>散射 · 护盾 · 磁铁 · 炸弹 · 加速，击杀概率掉落</dd>
+      <dt>精英</dt><dd>第 18 波后出现，必掉道具</dd>
+      <dt>Boss</dt><dd>每 10 波出现，三阶段弹幕</dd>
+    </dl>
+    <p class="sect">颜色即规则</p>
+    <dl class="keys">
+      <dt>霓虹青</dt><dd>我 · 安全区 · 可拾取助力</dd>
+      <dt>绿 → 橙 → 紫 → 红</dt><dd>危险递增：无害 → 单发 → 散射 → 环形弹幕</dd>
+      <dt>品红闪烁</dt><dd>精英怪</dd>
+    </dl>
+    <div class="menu-btns" style="margin-top:20px">
+      <button class="btn primary" data-act="menu">返回主菜单</button>
+    </div>
+  </section>
+
+  <section id="panel-pause" class="panel hidden">
+    <h2>已暂停</h2>
+    <div class="menu-btns">
+      <button class="btn primary" data-act="resume">继续游戏</button>
+      <button class="btn" data-act="abort">放弃本局</button>
+    </div>
+  </section>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

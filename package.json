@@ -1,0 +1,13 @@
+{
+  "name": "neon-void",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NEON VOID · 霓虹虚空。纵向下卷弹幕射击。零构建、零依赖、纯静态。",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "verify": "node scripts/verify.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "balance": "node scripts/balance.mjs"
+  }
+}
