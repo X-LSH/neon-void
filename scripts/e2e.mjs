@@ -244,9 +244,29 @@ async function main() {
   const hold = (n) => key('keyDown', ...keys[n]);
   const release = (n) => key('keyUp', ...keys[n]);
 
+  /** 轮询直到表达式为真。网络上"加载完成"没有单一事件可等，只能轮询。 */
+  const waitFor = async (expr, timeout = 25000, interval = 200) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) {
+      try {
+        if (await evaluate(expr)) return true;
+      } catch { /* 页面可能正在导航，忽略 */ }
+      await sleep(interval);
+    }
+    return false;
+  };
+
+  /**
+   * ★ 导航后**必须等模块图跑完**，不能固定 sleep。
+   *   本地 40 个模块瞬间到位，线上要过代理，逐级 import 的瀑布是真实耗时；
+   *   固定等待会把"还在加载"误判成"页面坏了"（曾在线上实测里踩到）。
+   *   `__NV` 在 main.js 末尾挂载，它出现即代表整个模块图求值完毕。
+   */
   const load = async (url = BASE) => {
     await send('Page.navigate', { url });
-    await sleep(1800);
+    const ready = await waitFor(`typeof window.__NV === 'object'`, 30000);
+    await sleep(400); // 让第一帧渲染出来，再做像素断言
+    return ready;
   };
 
   await send('Runtime.enable');
@@ -265,8 +285,9 @@ async function main() {
   const loadErrors = errors.slice();
   ok('模块加载期无控制台异常', loadErrors.length === 0,
     loadErrors.slice(0, 3).join('  |  '));
-  ok('页面脚本已执行（__NV 挂载）', (await evaluate(`typeof window.__NV`)) === 'object',
-    `typeof __NV = ${await evaluate(`typeof window.__NV`)}`);
+  ok('页面脚本已执行（模块图求值完毕，__NV 挂载）',
+    (await evaluate(`typeof window.__NV`)) === 'object',
+    `等待模块加载 ≤30s；typeof __NV = ${await evaluate(`typeof window.__NV`)}`);
   errors = [];
   if (loadErrors.length) {
     process.stdout.write('\n\x1b[31m加载期异常全文：\x1b[0m\n');
