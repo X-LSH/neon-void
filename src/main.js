@@ -291,6 +291,8 @@ window.__NV = {
   },
   gotoWave: (n) => battle.debug.gotoWave(n),
   forceKills: (n) => battle.debug.queueKills(n),
+  givePower: (ptype) => battle.debug.queuePower(ptype),
+  spawnCoins: (n) => battle.debug.spawnCoins(n),
   enemyCount: () => battle.debug.enemies(),
   wipeSave: () => { storage.wipe(); panels.refreshMenu(); },
 };

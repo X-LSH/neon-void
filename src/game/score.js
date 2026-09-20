@@ -35,6 +35,20 @@ export function addKill(s, base) {
   return gain;
 }
 
+/**
+ * 计击杀但**不累积连击**（炸弹清屏用）。
+ *
+ * 击杀总数必须照常累加 —— 结算页要显示它，玩家也确实清了这些敌人。
+ * 被排除的只是**连击计数与倍率**：一个炸弹把连击顶到 32 会让每次击杀
+ * 都吃到 4.1 倍率，实测单次给 42432 分（约占一局的一半）。
+ * 连击奖励的是**瞄准**，不是清屏。
+ */
+export function addKillFlat(s, base) {
+  s.kills += 1;
+  s.score += base;
+  return base;
+}
+
 export function addRaw(s, value) {
   const v = Math.max(0, Math.round(value));
   s.score += v;

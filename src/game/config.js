@@ -117,8 +117,20 @@ export const SCORE = {
   survivalPerSec: 12,
   coinValues: [10, 20, 30],
   coinDropChance: 0.45,
+  /** 常驻吸附半径：不靠道具也能捡到的近身范围 */
   coinAttractRadius: 42,
   coinAttractSpeed: 340,
+  /**
+   * ★ 磁铁期间**直接给定朝向玩家的速度**，而不是施加加速度。
+   *
+   * 用户报「磁铁好像只是吸引，不是一定能把道具吸过来」——
+   * 加速度会受掉落物自身初速与下坠影响，留出"逃逸"的余地；
+   * 直接赋速度才是真正的保证。近距离线性减速，避免在玩家身上来回抖。
+   */
+  magnetSpeed: 950,
+  magnetSlowRadius: 90,
+  /** 磁铁生效时，掉落物即使已经滑出下边界也拉回来（否则"保证"有缺口） */
+  magnetCullMargin: 200,
   powerDropChance: 0.07,
 };
 

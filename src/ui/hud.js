@@ -13,6 +13,21 @@ import { POWER } from '../game/config.js';
 import { POWER_COLOR } from '../render/palette.js';
 
 const POWER_LABEL = { spread: '散射', shield: '护盾', magnet: '磁铁', bomb: '炸弹', speed: '加速' };
+
+/**
+ * 拾取提示的文案。
+ * ★ 用户报「有些道具吃过以后效果不是很明显」—— 数值其实是对的
+ *   （实测散射 ×3、加速 ×1.5），问题在于**玩家看不出自己拿到了什么**。
+ *   护盾更是只有在被打中时才有感觉；不挨打就等于什么都没发生。
+ *   所以拾取时必须把「名字 + 具体效果 + 时长」直接说出来。
+ */
+const POWER_DESC = {
+  spread: ['主武器 ×3 路', `${POWER.spread}s`],
+  shield: ['吸收一次伤害', '直到被击中'],
+  magnet: ['全屏自动吸取', `${POWER.magnet}s`],
+  bomb: ['清空弹幕与小敌机', '即时'],
+  speed: ['移动速度 ×1.5', `${POWER.speed}s`],
+};
 const REFRESH = 0.1;
 
 export function createHud() {
@@ -29,6 +44,9 @@ export function createHud() {
     lives2: document.getElementById('hud-lives2'),
     powers: document.getElementById('hud-powers'),
     fps: document.getElementById('hud-fps'),
+    power: document.getElementById('hud-power'),
+    powerName: document.getElementById('hud-power-name'),
+    powerSub: document.getElementById('hud-power-sub'),
     boss: document.getElementById('hud-boss'),
     bossFill: document.getElementById('hud-bossfill'),
     banner: document.getElementById('hud-banner'),
@@ -104,8 +122,21 @@ export function createHud() {
       lastCombo = 0;
       lastBoss = false;
       el.banner.classList.remove('show');
+      el.power.classList.remove('show');
       el.boss.classList.remove('on');
       for (const [k, node] of rows) { node.remove(); rows.delete(k); }
+    },
+
+    /** 拾取道具时的名字 + 效果提示（1.5s） */
+    powerToast(ptype) {
+      const desc = POWER_DESC[ptype];
+      if (!desc) return;
+      el.powerName.textContent = POWER_LABEL[ptype] || ptype;
+      el.powerName.style.textShadow = `0 0 6px ${POWER_COLOR[ptype]}, 0 0 22px ${POWER_COLOR[ptype]}`;
+      el.powerSub.textContent = `${desc[0]} · ${desc[1]}`;
+      el.power.classList.remove('show');
+      void el.power.offsetWidth;
+      el.power.classList.add('show');
     },
 
     banner(text) {

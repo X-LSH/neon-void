@@ -7,7 +7,7 @@
  */
 
 import {
-  createWorld, stepWorld, snapshotWorld, PHASE, debugGotoWave, debugQueueKills,
+  createWorld, stepWorld, snapshotWorld, PHASE, debugGotoWave, debugQueueKills, debugQueuePower, debugSpawnCoins,
 } from '../game/world.js';
 import { createFxBridge } from '../render/fx.js';
 
@@ -22,7 +22,9 @@ export function createBattle({ particles, rng, audio, storage, hud, onEnd, setTi
   let world = null;
   let deathFxDone = false;
   let reported = false;
-  const fxBridge = createFxBridge(particles, rng);
+  const fxBridge = createFxBridge(particles, rng, {
+    onPower: (ptype) => hud.powerToast(ptype),
+  });
 
   return {
     start(seed) {
@@ -83,6 +85,8 @@ export function createBattle({ particles, rng, audio, storage, hud, onEnd, setTi
       snapshot: () => (world ? snapshotWorld(world) : null),
       gotoWave: (n) => { if (world) debugGotoWave(world, n); },
       queueKills: (n) => (world ? debugQueueKills(world, n) : 0),
+      queuePower: (t) => (world ? debugQueuePower(world, t) : null),
+      spawnCoins: (n) => (world ? debugSpawnCoins(world, n) : 0),
       enemies: () => (world ? world.enemies.count : 0),
       particles: () => particles.liveCount(),
       particleCap: () => particles.cap,

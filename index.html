@@ -196,6 +196,30 @@ table.board tr:nth-child(2) td:first-child{color:var(--gold)}
   100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}
 }
 
+/* 道具拾取提示：拾取时必须让人一眼看清"我拿到了什么、它做什么"。
+   只靠屏幕上多一圈光环是不够的 —— 那是"效果不明显"的直接来源。 */
+#hud-power{
+  position:absolute;left:50%;top:31%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  opacity:0;pointer-events:none;text-align:center;
+}
+#hud-power b{
+  font-family:var(--font-mono);font-size:clamp(19px,3.4vw,28px);letter-spacing:.24em;
+  margin-right:-.24em;color:#fff;
+}
+#hud-power i{
+  font-family:var(--font-mono);font-style:normal;font-size:clamp(10px,1.3vw,12px);
+  letter-spacing:.14em;color:var(--text);opacity:.85;
+}
+#hud-power.show{animation:powerToast 1.5s ease-out}
+@keyframes powerToast{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.72)}
+  12%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}
+  22%{transform:translate(-50%,-50%) scale(1)}
+  74%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-62%) scale(.98)}
+}
+
 /* ── 触屏 ─────────────────────────────────────────────────── */
 #touch{position:fixed;inset:0;z-index:5;display:none;pointer-events:none}
 body.touch-ui #touch{display:block}
@@ -242,6 +266,7 @@ body.touch-ui .pause-btn{display:flex}
   </div>
   <div id="hud-boss"><div class="boss-name">BOSS</div><div class="boss-bar"><i id="hud-bossfill"></i></div></div>
   <div id="hud-banner">WAVE 1</div>
+  <div id="hud-power"><b id="hud-power-name"></b><i id="hud-power-sub"></i></div>
 </div>
 
 <div class="ui">

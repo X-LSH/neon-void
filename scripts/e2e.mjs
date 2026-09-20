@@ -133,7 +133,8 @@ const PIXEL_PROBE = `(() => {
     green:  (r,gg,b) => gg > 186 && r < 122 && b < 172,
     orange: (r,gg,b) => r > 196 && gg > 58 && gg < 172 && b < 92,
     purple: (r,gg,b) => r > 148 && b > 196 && gg < 152,
-    gold:   (r,gg,b) => r > 196 && gg > 158 && b < 102
+    gold:   (r,gg,b) => r > 196 && gg > 158 && b < 102,
+    goldBeam:(r,gg,b) => r > 90 && gg > 70 && b < 72 && r - b > 55
   };
   const counts = {}; for (const k in P) counts[k] = 0;
   let bright = 0, seen = new Set();
@@ -441,6 +442,82 @@ async function main() {
   const killPerf = await evaluate(`__NV.perf()`);
   ok('连续击杀风暴下最坏单帧 CPU 耗时 ≤ 24ms', killPerf.frameMsPeak <= 24,
     `峰值 ${killPerf.frameMsPeak.toFixed(1)}ms`);
+
+  // ══ 5.5 道具反馈（用户报"吃过以后效果不明显"）═════════════
+  section('5.5 道具效果与反馈');
+  // ★ 牵引光束的测量必须**在磁铁出现之前**做，而且采样窗口要短。
+  //   踩过的坑：把它放在磁铁已开启之后，两次采样之间金币正在被吸走，
+  //   读数下降反映的是"金币变少"而不是"光束没画"—— 判据整个失效。
+  await evaluate(`__NV.spawnCoins(24)`);
+  await sleep(160);
+  const beamOff = (await evaluate(PIXEL_PROBE)).counts.goldBeam;
+  await evaluate(`__NV.givePower('magnet')`);
+  await sleep(60);   // 只够走 ~57 单位，几乎不会有金币被吃掉
+  const beamOn = (await evaluate(PIXEL_PROBE)).counts.goldBeam;
+  ok('磁铁：出现牵引光束（金色连线让金色像素跳增）', beamOn > beamOff * 1.25,
+    `goldBeam ${beamOff} → ${beamOn}`);
+
+  /**
+   * ★ 提示横幅必须**轮询**而不是"给完等 220ms 再读一次"。
+   *   玩家在测试期间会自然捡到别的道具，横幅会被它们覆盖 ——
+   *   实测就出现过"我要散射、读到护盾"的假失败。
+   *   正确的判据是「这个窗口内，期望的文案出现过」。
+   */
+  const toast = async (ptype, expectText) => {
+    await evaluate(`__NV.givePower('${ptype}')`);
+    const seen = [];
+    for (let i = 0; i < 12; i++) {
+      await sleep(40);
+      const pair = await evaluate(
+        `document.getElementById('hud-power-name').textContent + '|' +
+         document.getElementById('hud-power-sub').textContent`);
+      if (pair && !seen.includes(pair)) seen.push(pair);
+    }
+    return {
+      seen,
+      hit: seen.some((x) => x.includes(expectText)),
+      label: seen.join(' / ') || '(never shown)',
+    };
+  };
+
+  const tm = await toast('magnet', '全屏自动吸取');
+  ok('磁铁：弹出名称与效果提示', tm.hit, tm.label);
+  const stMagnet = await evaluate(`__NV.state()`);
+  ok('磁铁：世界状态确实生效（计时 > 0）', stMagnet.powers.magnet > 0, `magnet=${stMagnet.powers.magnet}`);
+  ok('磁铁：HUD 出现倒计时条', await evaluate(
+    `[...document.querySelectorAll('#hud-powers .pw span')].some(e => e.textContent === '磁铁')`));
+
+
+  const ts = await toast('spread', '主武器 ×3 路');
+  ok('散射：提示写明了它是 3 路', ts.hit, ts.label);
+  const stSpread = await evaluate(`__NV.state()`);
+  ok('散射：世界状态确实生效', stSpread.powers.spread > 0, `spread=${stSpread.powers.spread}`);
+
+  const th = await toast('shield', '吸收一次伤害');
+  ok('护盾：提示写明"吸收一次伤害"（这是它唯一的可见说明）', th.hit, th.label);
+  const stShield = await evaluate(`__NV.state()`);
+  ok('护盾：世界状态确实生效', stShield.shield === true, `shield=${stShield.shield}`);
+
+  const tv = await toast('speed', '移动速度 ×1.5');
+  ok('加速：提示写明了倍率', tv.hit, tv.label);
+
+  // 炸弹：提示 + 场上敌人**确实**被清掉且计入击杀
+  await evaluate(`__NV.gotoWave(14)`);
+  await sleep(2200);
+  const bombBefore = await evaluate(`__NV.state()`);
+  await evaluate(`__NV.givePower('bomb')`);
+  await sleep(260);
+  const bombAfter = await evaluate(`__NV.state()`);
+  ok('炸弹：弹出提示', await evaluate(`document.getElementById('hud-power').classList.contains('show')`));
+  // 正确的不变量是"炸完弹幕必须清零"，而不是"变少了"——
+  // 在还没刷出弹幕的时刻，"变少"会退化成 0 → 0 这种恒真的弱断言。
+  ok('炸弹：敌方弹幕被清空', bombAfter.counts.eBullets === 0,
+    `${bombBefore.counts.eBullets} → ${bombAfter.counts.eBullets}`);
+  ok('炸弹：清掉的敌机**计入击杀数**（不是静默消失）',
+    bombAfter.kills > bombBefore.kills, `击杀 ${bombBefore.kills} → ${bombAfter.kills}`);
+  ok('炸弹：得分确实增加', bombAfter.score > bombBefore.score,
+    `${bombBefore.score} → ${bombAfter.score}`);
+  await shot('02b-powerup');
 
   // ══ 6. Boss ════════════════════════════════════════════════
   section('6. Boss 波与预警');

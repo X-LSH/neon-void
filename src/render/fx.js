@@ -23,7 +23,9 @@ const ENEMY_TRAIL_RATE = 0.05;
 /** 引擎尾焰间隔。每个物理步都发（120Hz 也照发）会在 1 秒内吃光整个池子， */
 const TRAIL_INTERVAL = 0.022;
 
-export function createFxBridge(pool, rng) {
+/** 拾取反馈的强度与形态**按类型分化** —— 五道道具长得一样的话，
+ *  "捡到了什么"就只能靠读字，那是最弱的反馈。 */
+export function createFxBridge(pool, rng, hooks = {}) {
   let trailT = 0;
   let enemyTrailT = 0;
 
@@ -82,6 +84,43 @@ export function createFxBridge(pool, rng) {
 
   function ring(x, y, color, size, life = 0.42) {
     pool.one(x, y, 0, 0, life, size, KIND.RING, color, 0, 0);
+  }
+
+  /** 五道道具各自的拾取特效：形状本身就说明类型 */
+  function pickupBlast(x, y, ptype, color) {
+    ring(x, y, color, 52, 0.55);
+    ring(x, y, '#ffffff', 22, 0.3);
+    if (ptype === 'spread') {
+      // 三道向外张开的射线
+      for (let i = -1; i <= 1; i++) {
+        pool.burst(x, y, 6, {
+          speed: 230, jitter: 0.3, life: 0.42, size: 3,
+          kind: KIND.SHARD, color, drag: 1.5, rng,
+          dir: Math.PI / 2 + i * 0.5, spread: 0.24,
+        });
+      }
+    } else if (ptype === 'shield') {
+      // 双层护罩环，强调"包住"这件事
+      ring(x, y, color, 78, 0.75);
+      ring(x, y, color, 40, 0.5);
+      sparks(x, y, 16, color, 120, 2.6, 0.5);
+    } else if (ptype === 'magnet') {
+      // 由外向内收束：与"吸"的语义一致
+      for (let i = 0; i < 18; i++) {
+        const a = (Math.PI * 2 * i) / 18;
+        pool.one(x + Math.cos(a) * 74, y + Math.sin(a) * 74,
+          -Math.cos(a) * 190, -Math.sin(a) * 190, 0.4, 2.4, KIND.DOT, color, 0, 0.4);
+      }
+      ring(x, y, color, 60, 0.6);
+    } else if (ptype === 'speed') {
+      // 向后的速度线
+      pool.burst(x, y, 18, {
+        speed: 300, jitter: 0.4, life: 0.38, size: 3,
+        kind: KIND.SHARD, color, drag: 1.2, rng, dir: Math.PI / 2, spread: 0.9,
+      });
+    } else {
+      sparks(x, y, 12, color, 150, 2.4, 0.4);
+    }
   }
 
   return {
@@ -155,9 +194,8 @@ export function createFxBridge(pool, rng) {
 
           case 'pickup': {
             const color = POWER_COLOR[ev.ptype] || '#ffffff';
-            ring(ev.x, ev.y, color, 52, 0.55);
-            ring(ev.x, ev.y, '#ffffff', 22, 0.3);
-            sparks(ev.x, ev.y, 12, color, 150, 2.4, 0.4);
+            pickupBlast(ev.x, ev.y, ev.ptype, color);
+            if (hooks.onPower) hooks.onPower(ev.ptype);
             audio.play('pickup');
             break;
           }
@@ -169,9 +207,13 @@ export function createFxBridge(pool, rng) {
             break;
 
           case 'bomb':
-            sparks(ev.x, ev.y, 40, '#ffffff', 300, 3, 0.6);
-            ring(ev.x, ev.y, POWER_COLOR.bomb, 150, 0.7);
-            ring(ev.x, ev.y, '#ffffff', 90, 0.5);
+            // 炸弹的反馈必须最响：三层扩散环 + 大量碎屑 + 32 个击杀各自的爆炸
+            sparks(ev.x, ev.y, 52, '#ffffff', 340, 3, 0.65);
+            shards(ev.x, ev.y, 30, POWER_COLOR.bomb, 300, 4, 0.7);
+            ring(ev.x, ev.y, POWER_COLOR.bomb, 180, 0.8);
+            ring(ev.x, ev.y, POWER_COLOR.bomb, 110, 0.55);
+            ring(ev.x, ev.y, '#ffffff', 210, 0.5);
+            if (hooks.onPower) hooks.onPower('bomb');
             audio.play('bigDie');
             break;
 

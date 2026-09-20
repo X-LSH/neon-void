@@ -55,9 +55,33 @@ export function drawShip(ctx, p, t, x = p.x, y = p.y) {
   ctx.translate(x, y);
   ctx.globalAlpha = alpha;
 
-  // 尾焰（引擎在船尾）
+  // 尾焰（引擎在船尾）。加速时明显变长变亮 —— 让"速度"这件事看得见。
   thruster(ctx, -5.5, 15, 3.2, t, 0, PAL.playerTrail, p.powers.speed > 0 ? 1.5 : 1);
   thruster(ctx, 5.5, 15, 3.2, t, 1.9, PAL.playerTrail, p.powers.speed > 0 ? 1.5 : 1);
+
+  /**
+   * ★ 散射期间挂出两个副炮口。
+   * 光靠"子弹从 1 路变 3 路"来体现散射是不够的 —— 弹幕密的时候玩家
+   * 分不清是自己的火变宽了还是多了几发敌人的弹。给船加一个**持久的形状变化**，
+   * 一眼就能确认"散射还在"。
+   */
+  if (p.powers.spread > 0) {
+    const pod = 0.75 + 0.25 * Math.sin(t * 9);
+    for (const s of [-1, 1]) {
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fillStyle = PAL.danger;
+      ctx.beginPath();
+      ctx.arc(s * 9.4, -6, 2.6 * pod + 0.6, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.strokeStyle = PAL.danger;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(s * 9.4, -6, 4.6, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = alpha;
+  }
 
   fillPath(ctx, (c) => shipPath(c, 26, 32), color, 0.16);
   // 玩家是焦点：唯一允许 4 层辉光的元素之一

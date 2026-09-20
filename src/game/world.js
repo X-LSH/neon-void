@@ -16,7 +16,7 @@ import { createPlayer, resetPlayer, stepPlayer } from './player.js';
 import { createDropPool, stepDrops } from './drops.js';
 import { createScore, stepScore, addRaw } from './score.js';
 import { createDirector, stepDirector, beginWave as restartWave } from './wave.js';import { createBoss, stepBoss } from './boss.js';
-import { resolveCollisions, collectDrop, killEnemy } from './resolve.js';
+import { resolveCollisions, collectDrop, killEnemy, applyPower } from './resolve.js';
 
 export { PHASE };
 
@@ -43,6 +43,7 @@ export function createWorld(seed) {
     stats: { shots: 0, hits: 0, coins: 0, powers: 0, escaped: 0, bossKills: 0, kills: 0 },
     events: [],
     debugKills: 0,
+    debugPower: null,
   };
   resetPlayer(w.player);
   restartWave(w.director, 1);
@@ -116,6 +117,11 @@ export function stepWorld(w, dt, intent) {
       if (k <= 0) break;
       if (e.alive) { killEnemy(w, e); k -= 1; }
     }
+  }
+  if (w.debugPower) {
+    const t = w.debugPower;
+    w.debugPower = null;
+    applyPower(w, t, w.player.x, w.player.y);
   }
 
   if (w.phase === PHASE.PLAYING) {
@@ -238,6 +244,25 @@ export function debugDamagePlayer(w, amount = 1) {
 export function debugQueueKills(w, n = 8) {
   w.debugKills = (w.debugKills || 0) + Math.max(0, Math.floor(n));
   return w.debugKills;
+}
+
+/**
+ * 排队一次道具拾取（走 applyPower 真实路径，所以事件、粒子、
+ * HUD 提示横幅全都会照常发生）。必须**在步内消费** —— 理由同 debugQueueKills。
+ */
+export function debugQueuePower(w, ptype) {
+  w.debugPower = ptype;
+  return ptype;
+}
+
+/** 投放 n 个散布全场的金币（用于验证磁铁的"一定吸得过来"与牵引光束可见性） */
+export function debugSpawnCoins(w, n = 16) {
+  let made = 0;
+  for (let i = 0; i < n; i++) {
+    const d = w.drops.spawnCoin(w.rng.range(20, 460), w.rng.range(30, 560), w.rng);
+    if (d) made += 1;
+  }
+  return made;
 }
 
 /** 立刻清场（把测试快速推进到指定波次） */

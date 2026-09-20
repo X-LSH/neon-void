@@ -9,7 +9,7 @@ import { PLAYER, FIELD_W, FIELD_H, WAVE, FX, PHASE } from './config.js';
 import { KIND } from './bullets.js';
 import { segCircle, circleHit } from './collision.js';
 import { ENEMY_DEFS } from './enemies.js';
-import { addKill, addRaw, breakCombo } from './score.js';
+import { addKill, addKillFlat, addRaw, breakCombo } from './score.js';
 import { rollLoot, DROP } from './drops.js';
 import { grantPower } from './player.js';
 import { BOSS_HIT_RATIO } from './boss.js';
@@ -88,18 +88,27 @@ export function resolveCollisions(w) {
   }
 }
 
-export function damageEnemy(w, e, dmg) {
+export function damageEnemy(w, e, dmg, opts) {
   if (!e.alive) return false;
   e.hp -= dmg;
   e.flash = 1;
   if (e.hp > 0) return false;
-  killEnemy(w, e);
+  killEnemy(w, e, opts);
   return true;
 }
 
-export function killEnemy(w, e) {
+/**
+ * @param opts.noCombo 只给基础分、不累积连击。
+ *   用于**炸弹清屏**：清场本身值得奖励，但它不该同时把连击顶满 ——
+ *   否则一个炸弹 = 32 次连击 × 4.1 倍率，实测单次给到 17096 分，
+ *   约占一局的 21%，排行榜会退化成"谁攒的炸弹多"。
+ *   连击奖励的是**瞄准**，不是清屏。
+ */
+export function killEnemy(w, e, opts) {
   const def = ENEMY_DEFS[e.type];
-  const gain = addKill(w.score, def.score);
+  const gain = opts && opts.noCombo
+    ? addKillFlat(w.score, def.score)
+    : addKill(w.score, def.score);
   w.enemies.kill(e);
   w.stats.kills = w.score.kills;
 
@@ -204,7 +213,27 @@ export function applyPower(w, ptype, x, y) {
 
   if (ptype === 'bomb') {
     w.eBullets.clearEnemy();
-    const removed = w.enemies.clearSmall(4);
+    /**
+     * ★ 炸弹必须走**真实死亡路径**（killEnemy），不能直接置 alive = false。
+     *
+     * 曾经的写法是 `w.enemies.clearSmall()` —— 直接清池。后果是：
+     * 清掉 32 只敌机，但**击杀 +0、得分 +0、掉落 +0、一个粒子都没有**，
+     * 敌人凭空消失。玩家对炸弹的全部感知就是"屏幕上东西没了"，
+     * 这正是"道具效果不明显"的直接来源。
+     *
+     * 现在：轻型单位走 killEnemy（计分 + 掉落 + 爆炸事件），
+     * 重装单位只受重伤 —— 炸弹不该能秒掉坦克/精英。
+     */
+    let removed = 0;
+    for (const e of w.enemies.items) {
+      if (!e.alive) continue;
+      if (ENEMY_DEFS[e.type].cost >= 5) {
+        damageEnemy(w, e, 6, { noCombo: true });
+      } else {
+        killEnemy(w, e, { noCombo: true });
+        removed += 1;
+      }
+    }
     w.fx.shake = Math.max(w.fx.shake, FX.shakePlayerHit);
     w.fx.flash = Math.max(w.fx.flash, 0.35);
     w.events.push({ type: 'bomb', x, y, removed });

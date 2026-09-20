@@ -431,6 +431,127 @@ section('11. 掉落');
   ok('掉落池满时拒绝生成而不是扩容', pool2.count === 4 && pool2.items.length === 4);
 }
 
+// ══ 11.5 道具效果必须真的兑现 ═════════════════════════════════
+section('11.5 道具效果');
+{
+  const { createWorld: cw, stepWorld: sw } = await import('../src/game/world.js');
+  const { applyPower: apply, damageEnemy: dmgE } = await import('../src/game/resolve.js');
+  const { grantPower: grant } = await import('../src/game/player.js');
+  const idle2 = {
+    move: { x: 0, y: 0 }, pointer: { active: false, x: 0, y: 0 },
+    confirm: { pressed: false }, pause: { pressed: false }, mute: { pressed: false },
+  };
+  const grow = (w, steps) => {
+    for (let i = 0; i < steps; i++) { sw(w, CFG.FIXED_DT, idle2); w.player.hp = 3; w.player.invuln = 1; }
+  };
+
+  // ── 炸弹：必须走真实死亡路径 ──────────────────────────────
+  const bw = cw(21);
+  bw.director.wave = 14;
+  bw.director.t = 0;
+  bw.director.eventsLeft = 20;
+  grow(bw, 900);
+  const bBefore = {
+    enemies: bw.enemies.count, kills: bw.score.kills,
+    score: bw.score.score, drops: bw.drops.count, combo: bw.score.combo,
+  };
+  bw.events.length = 0;
+  apply(bw, 'bomb', bw.player.x, bw.player.y);
+  const kinds = bw.events.map((e) => e.type);
+  const deaths = kinds.filter((k) => k === 'enemyDie').length;
+  const cleared = bBefore.enemies - bw.enemies.count;
+  ok('炸弹清屏时场面确实有敌机可清（探针前提）', cleared >= 5, `清掉 ${cleared} 只`);
+  ok('★ 炸弹走真实死亡路径：逐只产生死亡事件（而不是静默消失）',
+    deaths >= 5 && deaths === cleared, `${deaths} 个 enemyDie / 清掉 ${cleared}`);
+  ok('★ 炸弹计入击杀总数（结算页要用）', bw.score.kills - bBefore.kills === cleared,
+    `+${bw.score.kills - bBefore.kills}`);
+  ok('炸弹给分但**不累积连击**（连击奖励瞄准，不是清屏）',
+    bw.score.score > bBefore.score && bw.score.combo === bBefore.combo,
+    `得分 +${bw.score.score - bBefore.score}，连击 ${bBefore.combo} → ${bw.score.combo}`);
+  ok('炸弹按清掉的敌机产生掉落', bw.drops.count > bBefore.drops,
+    `${bBefore.drops} → ${bw.drops.count}`);
+  // 炸弹不该秒掉重装单位
+  const tw = cw(22);
+  const tank = tw.enemies.spawn('tank', 240, 100, 14, 0);
+  const hpBefore = tank ? tank.hp : 0;
+  apply(tw, 'bomb', 240, 400);
+  ok('炸弹不会秒掉坦克（重装单位只受重伤）', tank && tank.alive && tank.hp < hpBefore,
+    `hp ${hpBefore} → ${tank ? tank.hp : 'null'}`);
+
+  // ── 磁铁：必须是「一定吸得过来」的保证 ────────────────────
+  const magnetRun = (withMagnet) => {
+    const rng = RNG.createRng(4242);
+    const w = cw(5);
+    const N = 16;
+    for (let i = 0; i < N; i++) {
+      w.drops.spawnCoin(rng.range(20, CFG.FIELD_W - 20), rng.range(30, CFG.FIELD_H - 140), rng);
+    }
+    if (withMagnet) grant(w.player, 'magnet');
+    // 玩家边走边吸；磁铁 8s、金币寿命 8s，所以必须在这之前全部到手
+    const steps = Math.round((CFG.POWER.magnet - 0.5) * 60);
+    for (let i = 0; i < steps; i++) {
+      sw(w, CFG.FIXED_DT, { ...idle2, move: { x: Math.sin(w.t * 1.4), y: 0 } });
+      w.player.hp = 3;
+    }
+    return { picked: w.stats.coins, left: w.drops.count, N };
+  };
+  const mOn = magnetRun(true);
+  const mOff = magnetRun(false);
+  // 断言是「撒下的一个不剩」而不是「恰好等于 N」——
+  // 测试期间玩家自动开火会打死敌机、额外掉金币，拾取数会**超过** N。
+  // 写成相等会把一个正确的系统判成失败（同"断言写死魔法数"的老毛病）。
+  ok('★ 磁铁生效期间撒下的掉落物一个不剩（不是"吸引一下"）',
+    mOn.picked >= mOn.N && mOn.left === 0, `拾取 ${mOn.picked}（撒下 ${mOn.N}），剩余 ${mOn.left}`);
+  ok('磁铁显著优于常驻吸附（对照组）', mOn.picked > mOff.picked * 2,
+    `有磁铁 ${mOn.picked} vs 无磁铁 ${mOff.picked}`);
+
+  // 磁铁是「直接给定速度」而不是加速度：远距离时速度应指向玩家且达到设定值
+  const vw = cw(6);
+  const coin = vw.drops.spawnCoin(30, 40, RNG.createRng(3));
+  grant(vw.player, 'magnet');
+  sw(vw, CFG.FIXED_DT, idle2);
+  const toPlayer = Math.atan2(vw.player.y - coin.y, vw.player.x - coin.x);
+  const head = Math.atan2(coin.vy, coin.vx);
+  let diff = Math.abs(head - toPlayer);
+  if (diff > Math.PI) diff = Math.PI * 2 - diff;
+  const speed = Math.hypot(coin.vx, coin.vy);
+  ok('磁铁是"直接给定速度"：方向精确指向玩家',
+    diff < 0.05, `偏差 ${(diff * 180 / Math.PI).toFixed(2)}°`);
+  ok('磁铁速度接近设定值（远距离不衰减）',
+    speed > CFG.SCORE.magnetSpeed * 0.95,
+    `${speed.toFixed(0)} / ${CFG.SCORE.magnetSpeed}`);
+
+  // ── 散射 / 加速的量化效果（数"在飞子弹"，不是数齐射次数）──
+  const sa = cw(7);
+  const sb = cw(7);
+  grant(sb.player, 'spread');
+  let peakA = 0;
+  let peakB = 0;
+  for (let i = 0; i < 240; i++) {
+    sw(sa, CFG.FIXED_DT, idle2);
+    sw(sb, CFG.FIXED_DT, idle2);
+    peakA = Math.max(peakA, sa.pBullets.count);
+    peakB = Math.max(peakB, sb.pBullets.count);
+  }
+  ok('散射让在飞子弹数变为 3 倍（量子弹，不是量齐射次数）',
+    Math.abs(peakB / Math.max(1, peakA) - 3) < 0.3, `${peakA} → ${peakB}`);
+  const sk = (boosted) => {
+    const w = cw(9);
+    if (boosted) grant(w.player, 'speed');
+    let peak = 0;
+    const mv = { ...idle2, move: { x: boosted ? -1 : 1, y: 0 } };
+    for (let i = 0; i < 60; i++) {
+      sw(w, CFG.FIXED_DT, mv);
+      peak = Math.max(peak, Math.abs(w.player.vx));
+    }
+    return peak;
+  };
+  const svBase = sk(false);
+  const svFast = sk(true);
+  ok('加速让移速变为 1.5 倍（量速度，位移动量会撞墙）',
+    Math.abs(svFast / svBase - 1.5) < 0.05, `${svBase.toFixed(0)} → ${svFast.toFixed(0)}`);
+}
+
 // ══ 12. 触屏几何 ══════════════════════════════════════════════
 section('12. 触屏几何');
 {

@@ -12,7 +12,7 @@
 import { FIELD_W, FIELD_H } from '../game/config.js';
 import { ENEMY_DEFS } from '../game/enemies.js';
 import { KIND } from '../game/bullets.js';
-import { PAL } from './palette.js';
+import { PAL, POWER_COLOR } from './palette.js';
 import { drawShip, drawPowerup, drawCoin } from './shapes.js';
 import { drawEnemy } from './enemies-art.js';
 import { drawBoss } from './boss-art.js';
@@ -32,6 +32,47 @@ export function visibleRect(vp) {
 }
 
 function drawDrops(ctx, w, alpha, t) {
+  const p = w.player;
+  const magnetOn = p.powers.magnet > 0;
+
+  /**
+   * ★ 磁铁的牵引光束。
+   * 用户说「磁铁好像只是吸引，不是一定吸得过来」—— 机制改成了"直接给定速度"
+   * 之后它确实吸得过来了，但**看不见就等于不存在**：掉落物从远处飞过来时，
+   * 玩家根本不知道那是磁铁在起作用。
+   * 一次 path 画完所有线，成本与掉落物数量无关。
+   */
+  if (magnetOn && p.alive) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    // 两层：外层光晕 + 内层亮芯。单层 alpha 0.2 时**连像素判据都看不见它** ——
+    // 那意味着玩家也看不见，等于没画。
+    ctx.strokeStyle = POWER_COLOR.magnet;
+    const beam = (width, a) => {
+      ctx.globalAlpha = a;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      for (const d of w.drops.items) {
+        if (!d.alive) continue;
+        ctx.moveTo(lerp(d.px, d.x, alpha), lerp(d.py, d.y, alpha));
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+    };
+    beam(3.4, 0.22);
+    beam(1.4, 0.62);
+    // 玩家身上的收束环：呼吸感让"正在吸"这件事持续可见
+    const pulse = 1 + Math.sin(t * 7) * 0.08;
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 30 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   for (const d of w.drops.items) {
     if (!d.alive) continue;
     const x = lerp(d.px, d.x, alpha);
