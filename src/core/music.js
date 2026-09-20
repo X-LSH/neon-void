@@ -83,20 +83,30 @@ export function createMusic(audio) {
     } catch { /* 忽略 */ }
   }
 
+  /**
+   * ★ 踩镲噪声缓冲只生成一次。
+   * 曾经每个音符新建一个 0.05s 的 AudioBuffer + 逐样本填充 ——
+   * 128 BPM 下每秒 16 个音符，就是每秒 16 次 2205 样本的循环 + 缓冲分配。
+   * 单看不致命，但它是**稳定发生**的成本，而且完全没必要。
+   */
+  let hatBuf = null;
+
   function hat(at, gain) {
     const { ctx, musicBus, ready } = audio.buses();
     if (!ready || !ctx) return;
     try {
-      const len = Math.floor(ctx.sampleRate * 0.05);
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      let s = 0x2545f491;
-      for (let i = 0; i < len; i++) {
-        s = (s * 1664525 + 1013904223) >>> 0;
-        d[i] = ((s / 4294967296) * 2 - 1) * (1 - i / len);
+      if (!hatBuf) {
+        const len = Math.floor(ctx.sampleRate * 0.05);
+        hatBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = hatBuf.getChannelData(0);
+        let s = 0x2545f491;
+        for (let i = 0; i < len; i++) {
+          s = (s * 1664525 + 1013904223) >>> 0;
+          d[i] = ((s / 4294967296) * 2 - 1) * (1 - i / len);
+        }
       }
       const src = ctx.createBufferSource();
-      src.buffer = buf;
+      src.buffer = hatBuf;
       const f = ctx.createBiquadFilter();
       f.type = 'highpass';
       f.frequency.value = 7200;

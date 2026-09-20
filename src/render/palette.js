@@ -37,6 +37,18 @@ export const PAL = {
   starFar: '#3a4a78',
   starMid: '#7f92c8',
   starNear: '#d8e6ff',
+  /** 少量暖色星点：全冷色星空会显得像噪点，冷暖混才有纵深 */
+  starWarm: '#ffc48a',
+  /** 眼窝：座舱/眼珠内部的暗色。同一个 token 给所有敌机用 ——
+   *  "所有眼睛共用一种暗"本身就是一种视觉语言，分开定义只会各走各的。 */
+  eyePit: '#2a0716',
+
+  // 星云（预渲染到离屏图层，只 blit，不逐帧生成）
+  nebulaA: '#3a1060',
+  nebulaB: '#0d4457',
+  nebulaC: '#5c0f47',
+  /** 远景巨型结构：比星点更暗更蓝，明确处于"很远"的层次 */
+  structure: '#243a6b',
 
   // 玩家：霓虹青 = 我 · 安全 · 助力
   player: NEON.cyan,

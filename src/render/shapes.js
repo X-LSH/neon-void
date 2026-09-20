@@ -1,15 +1,14 @@
 /**
- * 几何形状绘制。只读，不修改任何游戏状态。
+ * 玩家飞船、道具、金币的造型绘制。只读。
  *
- * 所有路径以 (0,0) 为中心 —— 调用方负责 translate/rotate。
- * 这是「色相即危险等级」的落地点：颜色只从 palette.js 取，此处不出现字面色值。
+ * 敌机与 Boss 的造型在 `enemies-art.js`（那个文件更长，拆开是为了守住
+ * 单文件 300 行的硬约束 —— 这条规则由 verify.mjs 的断言看守）。
  */
 
-import { PAL, ENEMY_COLOR, POWER_COLOR, POWER_GLYPH, BOSS_TRIM } from './palette.js';
 import {
-  strokeGlow, fillCircleGlow, fillPath, polygon, starPath,
-  STROKE_3, STROKE_4, CIRCLE_3, CIRCLE_4, TAU,
+  strokeGlow, fillCircleGlow, fillPath, polygon, STROKE_4, TAU,
 } from './glow.js';
+import { PAL, POWER_COLOR, POWER_GLYPH } from './palette.js';
 
 /** 玩家飞船：朝上的几何箭头 */
 export function shipPath(ctx, w, h) {
@@ -28,82 +27,22 @@ export function shipPath(ctx, w, h) {
   ctx.closePath();
 }
 
-export function shapePath(ctx, shape, r, rot = 0) {
-  switch (shape) {
-    case 'triangle':
-      ctx.moveTo(0, r * 1.05);
-      ctx.lineTo(-r * 0.94, -r * 0.76);
-      ctx.lineTo(r * 0.94, -r * 0.76);
-      ctx.closePath();
-      break;
-    case 'diamond':
-      ctx.moveTo(0, r * 1.12);
-      ctx.lineTo(r * 0.78, 0);
-      ctx.lineTo(0, -r * 1.12);
-      ctx.lineTo(-r * 0.78, 0);
-      ctx.closePath();
-      break;
-    case 'circle':
-      ctx.arc(0, 0, r, 0, TAU);
-      break;
-    case 'hexagon':
-      polygon(ctx, r, 6, Math.PI / 6 + rot);
-      break;
-    case 'star':
-      starPath(ctx, r * 1.15, r * 0.5, 6, rot);
-      break;
-    case 'boss':
-      polygon(ctx, r, 8, Math.PI / 8 + rot);
-      break;
-    default:
-      polygon(ctx, r, 5, rot);
-  }
-}
-
-/** 精英怪的闪烁：品红 ↔ 白，频率随紧张度提高 */
-export function blinkColor(base, t, rate = 6) {
-  return Math.sin(t * rate * TAU) > 0 ? base : '#ffffff';
-}
-
-/** x/y 允许传入插值后的位置（渲染在物理步之间插值，见 SPEC §1.1） */
-export function drawEnemy(ctx, e, def, t, x = e.x, y = e.y) {
-  const color = def.blink ? blinkColor(ENEMY_COLOR[e.type], t, 2.4) : ENEMY_COLOR[e.type];
-  ctx.save();
-  ctx.translate(x, y);
-
-  const rot = def.shape === 'star' || def.shape === 'hexagon' ? t * 0.8 : 0;
-  // 本体：暗底填充，让敌机在密集弹幕里仍有实体感
-  fillPath(ctx, (c) => shapePath(c, def.shape, def.r, rot), color, 0.14);
-  strokeGlow(ctx, (c) => shapePath(c, def.shape, def.r, rot), color, STROKE_3);
-
-  // 受击闪白
-  if (e.flash > 0) {
-    strokeGlow(ctx, (c) => shapePath(c, def.shape, def.r, rot), '#ffffff',
-      [{ w: 5, a: 0.5 * e.flash }, { w: 1.6, a: e.flash }]);
-  }
-
-  // 血条弧：只有坦克/精英有，且两者都是「需要被集火」的目标。
-  // 没有它，玩家会在血厚的敌机上白白浪费输出而不知道为什么打不死。
-  if (def.cost >= 5) {
-    const ratio = e.maxHp > 0 ? e.hp / e.maxHp : 1;
-    const rr = def.r + 7;
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, rr, -Math.PI / 2, -Math.PI / 2 + TAU);
-    ctx.stroke();
-    ctx.globalAlpha = 0.95;
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.arc(0, 0, rr, -Math.PI / 2, -Math.PI / 2 + TAU * ratio);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  // 内核点：让「打哪里有效」一眼可见
-  fillCircleGlow(ctx, 0, 0, def.r * 0.22, color, [{ m: 2.2, a: 0.3 }, { m: 1, a: 0.9 }]);
-  ctx.restore();
+/** 引擎尾焰：与敌机同款的相位抖动，保持全站视觉语言一致 */
+function thruster(ctx, x, y, r, t, phase, color, power = 1) {
+  const f = (0.72 + 0.28 * Math.sin(t * 18 + phase)) * power;
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.4, y);
+  ctx.lineTo(x, y + r * 1.6 * f);
+  ctx.lineTo(x + r * 0.4, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.34, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 export function drawShip(ctx, p, t, x = p.x, y = p.y) {
@@ -116,14 +55,31 @@ export function drawShip(ctx, p, t, x = p.x, y = p.y) {
   ctx.translate(x, y);
   ctx.globalAlpha = alpha;
 
+  // 尾焰（引擎在船尾）
+  thruster(ctx, -5.5, 15, 3.2, t, 0, PAL.playerTrail, p.powers.speed > 0 ? 1.5 : 1);
+  thruster(ctx, 5.5, 15, 3.2, t, 1.9, PAL.playerTrail, p.powers.speed > 0 ? 1.5 : 1);
+
   fillPath(ctx, (c) => shipPath(c, 26, 32), color, 0.16);
   // 玩家是焦点：唯一允许 4 层辉光的元素之一
   strokeGlow(ctx, (c) => shipPath(c, 26, 32), color, STROKE_4);
 
+  // 进气口细节：单次描边，不加辉光（细节不该抢主轮廓的注意力）
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.1;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.beginPath();
+  ctx.moveTo(-8.6, 2.4);
+  ctx.lineTo(-4.4, -3.2);
+  ctx.moveTo(8.6, 2.4);
+  ctx.lineTo(4.4, -3.2);
+  ctx.stroke();
+  ctx.globalAlpha = alpha;
+
   // 判定核心：**必须被画出来**。判定半径（6）远小于视觉体积（26×32），
   // 这是对玩家有利的设计，但只有看得见才谈得上「受伤可归因」。
   if (!blink) {
-    fillCircleGlow(ctx, 0, 0, 4.2, PAL.playerCore, [{ m: 2.6, a: 0.36 }, { m: 1.3, a: 0.7 }, { m: 1, a: 1 }]);
+    fillCircleGlow(ctx, 0, 0, 4.2, PAL.playerCore,
+      [{ m: 2.6, a: 0.36 }, { m: 1.3, a: 0.7 }, { m: 1, a: 1 }]);
   }
 
   if (p.shield) {
@@ -131,53 +87,6 @@ export function drawShip(ctx, p, t, x = p.x, y = p.y) {
     ctx.globalAlpha = alpha * 0.85;
     strokeGlow(ctx, (c) => c.arc(0, 0, 24 * pulse, 0, TAU), PAL.shield,
       [{ w: 6, a: 0.16 }, { w: 2.6, a: 0.4 }, { w: 1.2, a: 0.95 }]);
-  }
-
-  ctx.globalAlpha = 1;
-  ctx.restore();
-}
-
-export function drawBoss(ctx, b, t, x = b.x, y = b.y) {
-  const dying = b.dying;
-  const k = dying ? Math.min(1, b.deathT / 1.2) : 0;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.globalAlpha = dying ? 1 - k * k : 1;
-  ctx.scale(1 + k * 0.5, 1 + k * 0.5);
-
-  const rot = Math.sin(t * 0.5) * 0.06;
-  fillPath(ctx, (c) => shapePath(c, 'boss', b.r, rot), PAL.danger, 0.12);
-  strokeGlow(ctx, (c) => shapePath(c, 'boss', b.r, rot), PAL.danger, STROKE_4);
-
-  // 青色只做装饰描边（纯青是"我"的语义，这里用它的深色变体 BOSS_TRIM）
-  strokeGlow(ctx, (c) => shapePath(c, 'boss', b.r * 0.68, -rot), BOSS_TRIM,
-    [{ w: 4, a: 0.16 }, { w: 1.3, a: 0.8 }]);
-
-  const core = 0.5 + Math.sin(t * 3) * 0.1;
-  fillCircleGlow(ctx, 0, 0, b.r * 0.3 * core, PAL.danger,
-    [{ m: 2.4, a: 0.24 }, { m: 1.4, a: 0.5 }, { m: 1, a: 0.95 }]);
-
-  // 阶段灯：三颗，亮起的数量 = 当前阶段（玩家能预判还剩几段）
-  for (let i = 0; i < 3; i++) {
-    const on = i < b.phase;
-    ctx.globalAlpha *= 1;
-    ctx.globalAlpha = dying ? 1 - k : 1;
-    fillCircleGlow(ctx, -18 + i * 18, b.r * 0.62, 3.4,
-      on ? PAL.danger : PAL.faint, on ? [{ m: 2, a: 0.4 }, { m: 1, a: 1 }] : [{ m: 1, a: 1 }]);
-  }
-
-  if (b.flash > 0) {
-    strokeGlow(ctx, (c) => shapePath(c, 'boss', b.r, rot), '#ffffff',
-      [{ w: 8, a: 0.4 * b.flash }, { w: 2, a: b.flash }]);
-  }
-
-  // P3 环形爆发前的预警环：收缩到 0 就是爆发时刻。
-  // 无预告的危险 = 不可归因的死亡（SPEC §5.2）。
-  if (b.warnT > 0) {
-    const prog = b.warnT / 0.5;
-    ctx.globalAlpha = 0.35 + (1 - prog) * 0.5;
-    strokeGlow(ctx, (c) => c.arc(0, 0, b.r * (1.5 + prog * 2.2), 0, TAU), PAL.danger,
-      [{ w: 7, a: 0.2 }, { w: 1.8, a: 0.9 }]);
   }
 
   ctx.globalAlpha = 1;
@@ -231,7 +140,8 @@ export function drawPowerup(ctx, d, t, x, y) {
 
   // 旋转菱形外框：形状=类别（道具），与敌机的几何形状区分开
   fillPath(ctx, (c) => polygon(c, d.r, 4, spin), color, 0.2);
-  strokeGlow(ctx, (c) => polygon(c, d.r, 4, spin), color, STROKE_3);
+  strokeGlow(ctx, (c) => polygon(c, d.r, 4, spin), color,
+    [{ w: 7, a: 0.14 }, { w: 3, a: 0.34 }, { w: 1.2, a: 1 }]);
 
   ctx.globalAlpha = 0.95;
   ctx.strokeStyle = POWER_GLYPH;
@@ -253,5 +163,3 @@ export function drawCoin(ctx, d, t, x, y) {
   ctx.restore();
   fillCircleGlow(ctx, x, y, r * 0.5, PAL.coin, [{ m: 2.4, a: 0.16 }, { m: 1, a: 0.5 }]);
 }
-
-export { CIRCLE_3, CIRCLE_4 };

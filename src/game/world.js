@@ -39,7 +39,7 @@ export function createWorld(seed) {
     boss: null,
     director: createDirector(),
     score: createScore(),
-    fx: { shake: 0, shakeX: 0, shakeY: 0, flash: 0, slowmo: 0, timeScale: 1 },
+    fx: { shake: 0, shakeX: 0, shakeY: 0, flash: 0, slowmo: 0, slowmoCd: 0, timeScale: 1 },
     stats: { shots: 0, hits: 0, coins: 0, powers: 0, escaped: 0, bossKills: 0, kills: 0 },
     events: [],
     debugKills: 0,
@@ -146,6 +146,7 @@ export function stepWorld(w, dt, intent) {
 export function stepFx(w, dt) {
   const f = w.fx;
   if (f.slowmo > 0) f.slowmo = Math.max(0, f.slowmo - dt);
+  if (f.slowmoCd > 0) f.slowmoCd = Math.max(0, f.slowmoCd - dt);
   f.timeScale = f.slowmo > 0 ? FX.slowmoScale : 1;
 
   if (f.flash > 0) f.flash = Math.max(0, f.flash - dt * 2.6);
@@ -222,7 +223,7 @@ export function debugDamagePlayer(w, amount = 1) {
     p.alive = false;
     w.phase = PHASE.OVER;
     w.overT = 0;
-    w.fx.slowmo = Math.max(w.fx.slowmo, 0.9);
+    w.fx.slowmo = Math.max(w.fx.slowmo, FX.slowmoPlayerDeath);
   }
 }
 

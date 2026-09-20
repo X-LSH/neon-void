@@ -109,7 +109,13 @@ export function killEnemy(w, e) {
 
   const heavy = def.cost >= 5; // 坦克 / 精英
   w.fx.shake = Math.max(w.fx.shake, heavy ? FX.shakeElite : FX.shakeKill);
-  w.fx.slowmo = Math.max(w.fx.slowmo, heavy ? FX.slowmoElite : FX.slowmoKill);
+  // ★ 时间缩放只给重击，且**带冷却门闩**。普通击杀完全不碰 timeScale ——
+  //   详见 config.js：每次击杀都触发时实测 35% 的时间在慢动作里，
+  //   只留给重击仍有 19.5%，所以慢动作要当"稀有奖励"而不是"每次都有的反馈"。
+  if (heavy && w.fx.slowmo <= 0 && w.fx.slowmoCd <= 0) {
+    w.fx.slowmo = FX.slowmoHeavy;
+    w.fx.slowmoCd = FX.slowmoCooldown;
+  }
 
   rollLoot(w.drops, e.x, e.y, w.rng, e.type === 'elite');
 }
@@ -162,10 +168,10 @@ export function hitPlayer(w, cause) {
     w.overT = 0;
     // 死亡慢动作。注意它按**模拟时间**消耗，而模拟时间又被自己拉慢 0.35×，
     // 所以 0.8s 的慢动作 ≈ 2.3s 真实时间 —— 结算面板出现前的总等待由它决定。
-    w.fx.slowmo = Math.max(w.fx.slowmo, 0.8);
+    w.fx.slowmo = Math.max(w.fx.slowmo, FX.slowmoPlayerDeath);
     w.events.push({ type: 'death', x: p.x, y: p.y, wave: w.director.wave });
-  } else {
-    w.fx.slowmo = Math.max(w.fx.slowmo, 0.18);
+  } else if (w.fx.slowmo <= 0) {
+    w.fx.slowmo = FX.slowmoPlayerHit;
   }
   return true;
 }

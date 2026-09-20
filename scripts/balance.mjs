@@ -205,6 +205,9 @@ function playOne(profileName, seed, immortal = false, seconds = 0) {
   let capHits = 0;
   let peakEnemies = 0;
   let poolFullSteps = 0;
+  let slowSteps = 0;
+  let maxSlowRun = 0;
+  let curSlowRun = 0;
   const limit = immortal ? Math.round(60 * seconds) : 60 * 60 * 25;
 
   for (let step = 0; step < limit; step++) {
@@ -231,6 +234,12 @@ function playOne(profileName, seed, immortal = false, seconds = 0) {
         hitCauses[ev.cause] = (hitCauses[ev.cause] || 0) + 1;
       }
     }
+
+    if (w.fx.timeScale < 1) {
+      slowSteps += 1;
+      curSlowRun += 1;
+      if (curSlowRun > maxSlowRun) maxSlowRun = curSlowRun;
+    } else curSlowRun = 0;
 
     if (w.eBullets.count >= EBULLET.cap) capHits += 1;
     peakEB = Math.max(peakEB, w.eBullets.count);
@@ -264,6 +273,8 @@ function playOne(profileName, seed, immortal = false, seconds = 0) {
     peakEnemies,
     capHits,
     poolFullSteps,
+    slowPct: +(slowSteps / Math.max(1, w.t * 60) * 100).toFixed(1),
+    maxSlowRunSec: +(maxSlowRun / 60).toFixed(2),
     waves,
     bossWaves,
     stats: s.stats,
@@ -310,12 +321,12 @@ for (const r of rows) {
 }
 
 console.log(`\n计量局（血量恒满 · ${IMMORTAL_SEC}s · 受击率越低越强）：`);
-console.log('档位      种子   受击/分   总受击   到达波次   峰值弹  峰值怪  池满步数  上限命中');
+console.log('档位      种子   受击/分   总受击   到达波次   峰值弹  峰值怪  慢动作%  最长慢  ');
 for (const r of metered) {
   console.log(
     `  ${r.profile}    ${String(r.seed).padEnd(4)}  ${String(r.hitsPerMin).padStart(6)}  ` +
     `${String(r.hits).padStart(6)}  ${String(r.wave).padStart(8)}  ${String(r.peakEB).padStart(6)}  ` +
-    `${String(r.peakEnemies).padStart(6)}  ${String(r.poolFullSteps).padStart(8)}  ${String(r.capHits).padStart(8)}`,
+    `${String(r.peakEnemies).padStart(6)}  ${String(r.slowPct).padStart(6)}  ${String(r.maxSlowRunSec).padStart(6)}s`,
   );
 }
 const rate = (p) => metered.filter((r) => r.profile === p).map((r) => r.hitsPerMin);
@@ -367,6 +378,17 @@ check('受击数单调（配对均值）：硬核−新手 < 0',
   meanOf(SEEDS.map((s) => hitsOf('硬核', s) - hitsOf('新手', s))) < 0,
   `硬核−新手 = ${meanOf(SEEDS.map((s) => hitsOf('硬核', s) - hitsOf('新手', s))).toFixed(1)}`);
 
+// ★ 节奏不被打断：慢动作只留给重击与 Boss，不能长期停在低倍速。
+// 实测过 35%（每次击杀都触发慢动作）—— 玩家感知为"击败后卡顿"。
+const slowWorst = Math.max(...metered.map((r) => r.slowPct));
+const slowRun = Math.max(...metered.map((r) => r.maxSlowRunSec));
+check('慢动作时间占比 < 8%（否则节奏被打断，手感像卡顿）', slowWorst < 8,
+  `最高 ${slowWorst}%`);
+// 阈值给到 1.0s：短于它说明慢动作都是"重击那一顿"；
+// 唯一会超过 0.6s 的合法情况是**玩家死亡**——那是一次性的高潮定格（0.8s），
+// 不属于"节奏被反复打断"。把它算进这条断言是在惩罚一个正确的设计。
+check('最长连续慢动作 < 1.0s（>0.6s 只可能是玩家死亡那一次）', slowRun < 1.0, `最长 ${slowRun}s`);
+
 // 难度必须真的在变难：从「无差别」到「有区分」的走势
 check('受击率随难度确实上升',
   metered.every((r) => r.hits > 0),
@@ -395,7 +417,12 @@ check('敌机池持续打满的时间占比 < 2%',
 
 check('熟练档波次推进到 12+', byProfile('熟练').every((r) => r.wave >= 12),
   `最低 ${Math.min(...byProfile('熟练').map((r) => r.wave))}`);
-check('计量局能推进到 20 波', metered.every((r) => r.wave >= 20),
+// ★ 波次由时间驱动，所以期望值必须**随时长推导**，不能写死 ——
+//   写死 20 的后果是：把 IMMORTAL_SEC 调成 240 之后它会假失败。
+//   实测标尺约 15~20 秒一波，这里取 20 秒/波作为下界。
+const minWave = Math.floor(IMMORTAL_SEC / 20);
+check(`计量局能推进到 ${minWave} 波（${IMMORTAL_SEC}s ÷ 20s/波）`,
+  metered.every((r) => r.wave >= minWave),
   `最低 ${Math.min(...metered.map((r) => r.wave))}`);
 check('熟练档击杀 > 60', byProfile('熟练').every((r) => r.kills > 60),
   `最低 ${Math.min(...byProfile('熟练').map((r) => r.kills))}`);

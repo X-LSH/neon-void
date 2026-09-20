@@ -11,11 +11,47 @@
 
 import { KIND } from './particles.js';
 import { PAL, ENEMY_COLOR, POWER_COLOR } from './palette.js';
+
+/** 敌机引擎尾迹的节流间隔：0.05s → 20 次/秒 */
+const ENEMY_TRAIL_INTERVAL = 0.05;
+/**
+ * 每次 tick 只有这个比例的敌机留尾迹。
+ * 全留会把粒子池挤满，而粒子池是"溢出即覆盖最旧"的 ——
+ * 结果是把爆炸碎片那种真正需要被看到的粒子挤掉。
+ */
+const ENEMY_TRAIL_RATE = 0.05;
 /** 引擎尾焰间隔。每个物理步都发（120Hz 也照发）会在 1 秒内吃光整个池子， */
 const TRAIL_INTERVAL = 0.022;
 
 export function createFxBridge(pool, rng) {
   let trailT = 0;
+  let enemyTrailT = 0;
+
+  /**
+   * 敌机引擎尾迹。
+   * 视差星点让"背景在动"，但敌机本身要看起来**自己在飞**才有活物感 ——
+   * 这是最便宜的一招：几个 DOT 粒子，代价可忽略。
+   *
+   * 必须**限流 + 抽稀**：40 只敌机每 tick 都发尾迹，1 秒内就能把 1600 的池子
+   * 吃掉大半，而池是环形覆盖的 —— 挤掉的恰好是爆炸碎片那种真正需要被看到的粒子。
+   */
+  function enemyTrails(w, dt) {
+    enemyTrailT -= dt;
+    if (enemyTrailT > 0) return;
+    enemyTrailT = ENEMY_TRAIL_INTERVAL;
+    // 高密度时尾迹也停：它是最"可有可无"的一层，而且会挤占爆炸粒子的池子
+    if (w.enemies.count > 45) return;
+    for (const e of w.enemies.items) {
+      if (!e.alive) continue;
+      if (e.y < -10 || e.y > 730) continue;
+      if (rng.next() > ENEMY_TRAIL_RATE) continue;
+      pool.one(
+        e.x + rng.jitter(2.4), e.y - e.r * 0.75,
+        rng.jitter(12), -34 - rng.range(0, 40),
+        0.2, 1.9, KIND.DOT, ENEMY_COLOR[e.type] || PAL.danger, 0, 2.8,
+      );
+    }
+  }
 
   function trail(p, dt) {
     trailT -= dt;
@@ -49,11 +85,12 @@ export function createFxBridge(pool, rng) {
   }
 
   return {
-    reset() { trailT = 0; },
+    reset() { trailT = 0; enemyTrailT = 0; },
 
     consume(w, dt, audio) {
       const p = w.player;
       if (p.alive) trail(p, dt);
+      enemyTrails(w, dt);
 
       for (const ev of w.events) {
         switch (ev.type) {

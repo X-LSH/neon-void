@@ -10,8 +10,7 @@
 
 export function createLoop({ step, draw, fixedDt, maxSteps = 6, maxFrameDt = 0.25 }) {
   if (!(fixedDt > 0)) throw new Error('createLoop 需要正的 fixedDt');
-  let raf = 0;
-  let last = 0;
+  let raf = 0;  let last = 0;
   let acc = 0;
   let running = false;
 
@@ -24,6 +23,21 @@ export function createLoop({ step, draw, fixedDt, maxSteps = 6, maxFrameDt = 0.2
   let fpsFrames = 0;
   let fps = 0;
 
+  /**
+   * 帧内 CPU 耗时（step + draw）。
+   *
+   * 为什么必须单独测：`fps` 是**被 vsync 钉住的**，掉帧时它会掉到 30/45，
+   * 但偶发的一次 40ms 卡顿会把 60 帧里的一帧拉长而 fps 只掉到 55 ——
+   * 肉眼看得出来、fps 看不出来。所以"卡顿"必须用**最坏单帧耗时**度量。
+   * 窗口取 1 秒，避免一次偶发尖峰被永久记住。
+   */
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now
+    ? performance.now() : Date.now());
+  let frameMs = 0;
+  let frameMsMax = 0;
+  let frameMsPeak = 0;
+  let msWindow = 0;
+
   const frame = (now) => {
     raf = requestAnimationFrame(frame);
     if (!last) {
@@ -35,6 +49,7 @@ export function createLoop({ step, draw, fixedDt, maxSteps = 6, maxFrameDt = 0.2
     if (!(dt > 0)) return;
     if (dt > maxFrameDt) dt = maxFrameDt;
 
+    const t0 = nowMs();
     acc += dt * timeScale;
 
     let steps = 0;
@@ -56,6 +71,15 @@ export function createLoop({ step, draw, fixedDt, maxSteps = 6, maxFrameDt = 0.2
     }
 
     draw(acc / fixedDt);
+
+    frameMs = nowMs() - t0;
+    if (frameMs > frameMsMax) frameMsMax = frameMs;
+    msWindow += dt;
+    if (msWindow >= 1) {
+      frameMsPeak = frameMsMax;
+      frameMsMax = 0;
+      msWindow = 0;
+    }
   };
 
   return {
@@ -77,6 +101,13 @@ export function createLoop({ step, draw, fixedDt, maxSteps = 6, maxFrameDt = 0.2
     getTimeScale: () => timeScale,
     /** 渲染插值系数 0..1 */
     alpha: () => acc / fixedDt,
-    stats: () => ({ fps, stepCount }),
+    stats: () => ({ fps, stepCount, frameMs, frameMsPeak }),
+    /** 清空帧耗时窗口 —— 让"某次操作会不会造成尖峰"可以被单独测量 */
+    resetStats: () => {
+      frameMs = 0;
+      frameMsMax = 0;
+      frameMsPeak = 0;
+      msWindow = 0;
+    },
   };
 }

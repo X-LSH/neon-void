@@ -428,6 +428,20 @@ async function main() {
   ok('击杀确实当场产出粒子（因果，不是"数量看起来还行"）',
     pAfter >= pBefore + 40, `${pBefore} → ${pAfter}`);
 
+  // ★ 用户报的"击败后卡顿"必须有一条断言看守，否则它会悄悄回来。
+  //   触发一次真实击杀风暴，量最坏单帧 —— 这才是"击败不卡"的证据。
+  await evaluate(`__NV.gotoWave(22)`);
+  await sleep(2500);
+  await evaluate(`__NV.perfReset()`);
+  for (let i = 0; i < 4; i++) {
+    await evaluate(`__NV.forceKills(6)`);
+    await sleep(160);
+  }
+  await sleep(500);
+  const killPerf = await evaluate(`__NV.perf()`);
+  ok('连续击杀风暴下最坏单帧 CPU 耗时 ≤ 24ms', killPerf.frameMsPeak <= 24,
+    `峰值 ${killPerf.frameMsPeak.toFixed(1)}ms`);
+
   // ══ 6. Boss ════════════════════════════════════════════════
   section('6. Boss 波与预警');
   await evaluate(`__NV.gotoWave(10)`);
@@ -444,7 +458,27 @@ async function main() {
 
   // ══ 7. 帧率 ════════════════════════════════════════════════
   section('7. 帧率（肉眼分辨不出 52 与 60，必须读数字）');
-  // 用非 Boss 波测密度：Boss 波只有 Boss 一个人开火，密度反而不是最高的
+  /**
+   * ★ 帧率要分**两个密度**测，因为标准不一样：
+   *   · 典型密度（第 14 波）：这才是玩家真正待的地方 ——
+   *     平衡实测显示熟练玩家死在第 14~16 波。这里必须满帧、满细节。
+   *   · 晚期密度（第 24 波 / 60+ 敌机 / 500+ 弹幕）：这里靠自适应 LOD 兜底，
+   *     只要求"不明显掉帧"，不要求满帧 —— 否则就是逼着砍掉平时的画面。
+   * 只测晚期会把标准定得过松（平时看不出问题），只测典型又会漏掉晚期崩塌。
+   */
+  await evaluate(`__NV.gotoWave(14)`);
+  await hold('left');
+  await sleep(2000);
+  await hold('right');
+  await release('left');
+  await sleep(2000);
+  await release('right');
+  await sleep(1500);
+  const fpsTypical = await evaluate(`__NV.fps()`);
+  const stTypical = await evaluate(`__NV.state()`);
+  ok('典型密度下帧率 ≥ 55（玩家 80% 时间在这里）', fpsTypical >= 55,
+    `fps=${fpsTypical.toFixed(1)}，敌机 ${stTypical.counts.enemies}，敌弹 ${stTypical.counts.eBullets}`);
+
   await evaluate(`__NV.gotoWave(24)`);
   await hold('left');
   await sleep(2200);
@@ -452,10 +486,17 @@ async function main() {
   await release('left');
   await sleep(2200);
   await release('right');
-  await sleep(400);
+  await sleep(1200);
   const fps = await evaluate(`__NV.fps()`);
-  ok('密集弹幕下帧率 ≥ 55', fps >= 55, `fps=${fps.toFixed(1)}`);
   const st2 = await evaluate(`__NV.state()`);
+  ok('晚期高密度下帧率 ≥ 45（自适应 LOD 兜底，允许降级）', fps >= 45,
+    `fps=${fps.toFixed(1)}，敌机 ${st2.counts.enemies}，敌弹 ${st2.counts.eBullets}`);
+  // ★ fps 是被 vsync 钉住的：偶发的一次 40ms 卡顿只会把 60 帧里的一帧拉长、
+  //   fps 掉到 55 就回来了 —— 肉眼看得出来、fps 看不出来。
+  //   所以"卡顿"必须用**最坏单帧 CPU 耗时**度量。
+  const perf = await evaluate(`__NV.perf()`);
+  ok('密集战斗下最坏单帧 CPU 耗时 ≤ 24ms', perf.frameMsPeak <= 24,
+    `峰值 ${perf.frameMsPeak.toFixed(1)}ms，最近一帧 ${perf.frameMs.toFixed(1)}ms`);
   ok('第 24 波弹幕确实很密', st2.counts.eBullets > 10, `eBullets=${st2.counts.eBullets}`);
   ok('第 24 波敌机数量可观', st2.counts.enemies > 3, `enemies=${st2.counts.enemies}`);
 

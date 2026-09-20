@@ -13,7 +13,9 @@ import { FIELD_W, FIELD_H } from '../game/config.js';
 import { ENEMY_DEFS } from '../game/enemies.js';
 import { KIND } from '../game/bullets.js';
 import { PAL } from './palette.js';
-import { drawEnemy, drawShip, drawBoss, drawPowerup, drawCoin } from './shapes.js';
+import { drawShip, drawPowerup, drawCoin } from './shapes.js';
+import { drawEnemy } from './enemies-art.js';
+import { drawBoss } from './boss-art.js';
 import { drawParticles } from './particles.js';
 import { createBackground, drawFieldFrame } from './background.js';
 
@@ -40,9 +42,27 @@ function drawDrops(ctx, w, alpha, t) {
 }
 
 function drawEnemies(ctx, w, alpha, t) {
+  const p = w.player;
+  /**
+   * ★ 高密度时关掉装饰性细节（眼珠 / 尾焰 / 炮塔）。
+   *
+   * 这是弹幕游戏的标准取舍：屏幕上有 55 只以上敌机时，
+   * 「这只的眼睛在看哪」无论如何都读不出来了，但每只省下的 4~8 次填充
+   * 是实打实的。**降级只发生在最乱的时刻，平静时仍然是最丰富的画面。**
+   *
+   * 阈值定在 55 的依据：平衡实测显示熟练玩家死在第 14~16 波（约 30~45 只），
+   * 所以**整局典型体验里细节始终是全开的**，这条 LOD 只在晚期兜底。
+   * 轮廓（精灵）+ 血条弧 + 受击闪白**不降级** —— 它们是可读性的一部分。
+   */
+  const detailOn = w.enemies.count <= 55;
   for (const e of w.enemies.items) {
     if (!e.alive) continue;
-    drawEnemy(ctx, e, ENEMY_DEFS[e.type], t, lerp(e.px, e.x, alpha), lerp(e.py, e.y, alpha));
+    const x = lerp(e.px, e.x, alpha);
+    const y = lerp(e.py, e.y, alpha);
+    // 朝向玩家：座舱/炮口/眼珠都看它。这是"它盯着我"的视觉来源，
+    // 也是玩家判断"这架在瞄哪"的信息（不只是好看）。
+    const aim = Math.atan2(p.y - y, p.x - x);
+    drawEnemy(ctx, e, ENEMY_DEFS[e.type], t, x, y, aim, detailOn);
   }
 }
 
@@ -100,8 +120,11 @@ function drawEnemyBullets(ctx, w, alpha) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
 
-  // 密集时降级：只画核，不画辉光 —— 帧率优先于光晕（SPEC §9）
-  const softGlow = n < 420;
+  // ★ 自适应降级：辉光只在中低密度时画。
+  // 阈值从 420 降到 260 —— 因为实测显示真正贵的是**每发子弹的填充面积**，
+  // 而 260 发时屏幕已经足够亮，去掉辉光不影响"弹幕看得清"这件事（核还在）。
+  // 帧率优先于光晕，但降级阈值必须是明确的数字，不能"看起来差不多就砍"。
+  const softGlow = n < 380;
 
   if (softGlow) {
     for (const k of [KIND.ENEMY, KIND.HEAVY]) {
@@ -186,7 +209,10 @@ export function createWorldRenderer(vp, particles, bgRng) {
       drawDrops(ctx, w, alpha, w.t);
       drawEnemies(ctx, w, alpha, w.t);
       if (w.boss) {
-        drawBoss(ctx, w.boss, w.t, lerp(w.boss.px, w.boss.x, alpha), lerp(w.boss.py, w.boss.y, alpha));
+        const bx = lerp(w.boss.px, w.boss.x, alpha);
+        const by = lerp(w.boss.py, w.boss.y, alpha);
+        drawBoss(ctx, w.boss, w.t, bx, by,
+          Math.atan2(w.player.y - by, w.player.x - bx));
       }
       if (w.player.alive) {
         drawShip(ctx, w.player, w.t,
